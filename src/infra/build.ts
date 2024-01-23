@@ -194,7 +194,7 @@ export class MyCodeBuild extends Construct {
                 },
                 location: codeSourceLocation,
                 type: "GITHUB",
-                buildspec: "buildspec-ecs.yml",
+                buildspec: "buildspec.yml",
             },
             sourceVersion: sourceVersionBranch,
             tags: {
