@@ -22,9 +22,9 @@ export class EcsPipeline extends TerraformStack {
 
         const s3forpipelineartifact = new MyS3Bucket(this, "pipeline_artifact_s3_bucket", vars, artifactstorekmskey.keyId)
 
-        const ssdipd = new MyCodeBuild(this, "ecs_build", vars, "https://github.com/fopingn/ssd-idp.git", "main", s3forpipelineartifact.bucketArn);
+        const ssdipdbuild = new MyCodeBuild(this, "ecs_build", vars, "https://github.com/fopingn/ssd-idp.git", "main", s3forpipelineartifact.bucketArn);
 
-        new MyPipeline(this, "ecs_pipeline", vars, ssdipd.buildProjectName, s3forpipelineartifact.bucketArn, s3forpipelineartifact.bucketName, artifactstorekmskey.keyId );
+        new MyPipeline(this, "ecs_pipeline", vars, ssdipdbuild.buildProjectName, s3forpipelineartifact.bucketArn, s3forpipelineartifact.bucketName, artifactstorekmskey.keyId );
 
     }
 }
