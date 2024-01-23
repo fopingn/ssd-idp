@@ -150,7 +150,7 @@ export class MyCodeBuild extends Construct {
         ////// codebuild project definition //////
         const awsCodebuildProjectExample = new CodebuildProject(this, "codebuild_project", {
             artifacts: {
-                type: "CODEPIPELINE",
+                type: "NO_ARTIFACTS",
             },
             buildTimeout: 5,
             // cache: {
@@ -193,7 +193,7 @@ export class MyCodeBuild extends Construct {
                     fetchSubmodules: true,
                 },
                 location: codeSourceLocation,
-                type: "CODEPIPELINE",
+                type: "GITHUB",
                 buildspec: "buildspec.yml",
             },
             sourceVersion: sourceVersionBranch,
