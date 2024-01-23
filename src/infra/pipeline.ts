@@ -1,32 +1,43 @@
 
 import { Construct } from "constructs";
-import { Token,} from "cdktf";
+import { Fn, } from "cdktf";
 import { Codepipeline } from "@cdktf/provider-aws/lib/codepipeline";
 import { CodestarconnectionsConnection } from "@cdktf/provider-aws/lib/codestarconnections-connection";
 import { DataAwsIamPolicyDocument } from "@cdktf/provider-aws/lib/data-aws-iam-policy-document";
-import { DataAwsKmsAlias } from "@cdktf/provider-aws/lib/data-aws-kms-alias";
+//import { DataAwsKmsAlias } from "@cdktf/provider-aws/lib/data-aws-kms-alias";
 import { IamRole } from "@cdktf/provider-aws/lib/iam-role";
 import { IamRolePolicy } from "@cdktf/provider-aws/lib/iam-role-policy";
-import { S3Bucket } from "@cdktf/provider-aws/lib/s3-bucket";
-import { S3BucketPublicAccessBlock } from "@cdktf/provider-aws/lib/s3-bucket-public-access-block";
+// import { S3Bucket } from "@cdktf/provider-aws/lib/s3-bucket";
+// import { S3BucketPublicAccessBlock } from "@cdktf/provider-aws/lib/s3-bucket-public-access-block";
+// import { MyKmsKey } from "./kms";
+import { Tfvars } from "./variables";
 
-class pipeline extends Construct {
-    constructor(scope: Construct, name: string) {
+export class MyPipeline extends Construct {
+    //public readonly pipelineArtifactS3Arn: string;
+    constructor(scope: Construct, 
+        name: string,
+        vars: Tfvars,
+        buildProjectName: string,
+        codepipelinebucketarn: string,
+        codepipelinebucketname: string,
+        kmskeyid: string) {
         super(scope, name);
+        const nameTagPrefix = `${Fn.lookup(vars.defaultTags, "project", "")}`
         const githubConnnection = new CodestarconnectionsConnection(this, "sso-idp", {
             name: "sso-idp-connection",
             providerType: "GitHub",
         });
-        const codepipelineBucket = new S3Bucket(this, "codepipeline_bucket", {
-            bucket: "test-bucket",
-        });
-        new S3BucketPublicAccessBlock(this, "codepipeline_bucket_pab", {
-            blockPublicAcls: true,
-            blockPublicPolicy: true,
-            bucket: codepipelineBucket.id,
-            ignorePublicAcls: true,
-            restrictPublicBuckets: true,
-        });
+        // const codepipelineBucket = new S3Bucket(this, "codepipeline_bucket_for_artifact", {
+        //     bucket: `${nameTagPrefix}-pipeline-bucket-artifact`,
+        // });
+        // this.pipelineArtifactS3Arn = codepipelineBucket.arn;
+        // new S3BucketPublicAccessBlock(this, "codepipeline_bucket_pab", {
+        //     blockPublicAcls: true,
+        //     blockPublicPolicy: true,
+        //     bucket: codepipelineBucket.id,
+        //     ignorePublicAcls: true,
+        //     restrictPublicBuckets: true,
+        // });
         const assumeRole = new DataAwsIamPolicyDocument(this, "assume_role", {
             statement: [
                 {
@@ -56,8 +67,8 @@ class pipeline extends Construct {
                         ],
                         effect: "Allow",
                         resources: [
-                            codepipelineBucket.arn,
-                            "${" + codepipelineBucket.arn + "}/*",
+                            codepipelinebucketarn,
+                            "${" + codepipelinebucketarn + "}/*",
                         ],
                     },
                     {
@@ -73,36 +84,35 @@ class pipeline extends Construct {
                 ],
             }
         );
-        const s3Kmskey = new DataAwsKmsAlias(this, "s3kmskey", {
-            name: "alias/myKmsKey",
-        });
+
+
         const codepipelineRole = new IamRole(this, "codepipeline_role", {
-            assumeRolePolicy: Token.asString(assumeRole.json),
-            name: "test-role",
+            assumeRolePolicy: assumeRole.json,
+            name: `${nameTagPrefix}-codepipeline-role`,
         });
         const awsIamRolePolicyCodepipelinePolicy = new IamRolePolicy(
             this,
-            "codepipeline_policy_7",
+            "codepipeline_policy_attachment",
             {
-                name: "codepipeline_policy",
-                policy: Token.asString(codepipelinePolicy.json),
+                name: "codepipeline_policy_attachment",
+                policy: codepipelinePolicy.json,
                 role: codepipelineRole.id,
             }
         );
         /*This allows the Terraform resource name to match the original name. You can remove the call if you don't need them to match.*/
-        awsIamRolePolicyCodepipelinePolicy.overrideLogicalId("codepipeline_policy");
+        awsIamRolePolicyCodepipelinePolicy.overrideLogicalId("codepipeline_policy_attachment");
         new Codepipeline(this, "codepipeline", {
             artifactStore: [
                 {
                     encryptionKey: {
-                        id: Token.asString(s3Kmskey.arn),
+                        id: kmskeyid,
                         type: "KMS",
                     },
-                    location: codepipelineBucket.bucket,
+                    location: codepipelinebucketname,
                     type: "S3",
                 },
             ],
-            name: "tf-test-pipeline",
+            name: `${nameTagPrefix}-pipeline`,
             roleArn: codepipelineRole.arn,
             stage: [
                 {
@@ -112,7 +122,7 @@ class pipeline extends Construct {
                             configuration: {
                                 BranchName: "main",
                                 ConnectionArn: githubConnnection.arn,
-                                FullRepositoryId: "my-organization/sso-idp",
+                                FullRepositoryId: "fopingn/ssd-idp",
                             },
                             name: "Source",
                             outputArtifacts: ["source_output"],
@@ -128,7 +138,7 @@ class pipeline extends Construct {
                         {
                             category: "Build",
                             configuration: {
-                                ProjectName: "test",
+                                ProjectName: buildProjectName,
                             },
                             inputArtifacts: ["source_output"],
                             name: "Build",
@@ -140,26 +150,26 @@ class pipeline extends Construct {
                     ],
                     name: "Build",
                 },
-                {
-                    action: [
-                        {
-                            category: "Deploy",
-                            configuration: {
-                                ActionMode: "REPLACE_ON_FAILURE",
-                                Capabilities: "CAPABILITY_AUTO_EXPAND,CAPABILITY_IAM",
-                                OutputFileName: "CreateStackOutput.json",
-                                StackName: "MyStack",
-                                TemplatePath: "build_output::sam-templated.yaml",
-                            },
-                            inputArtifacts: ["build_output"],
-                            name: "Deploy",
-                            owner: "AWS",
-                            provider: "CloudFormation",
-                            version: "1",
-                        },
-                    ],
-                    name: "Deploy",
-                },
+                // {
+                //     action: [
+                //         {
+                //             category: "Deploy",
+                //             configuration: {
+                //                 ActionMode: "REPLACE_ON_FAILURE",
+                //                 Capabilities: "CAPABILITY_AUTO_EXPAND,CAPABILITY_IAM",
+                //                 OutputFileName: "CreateStackOutput.json",
+                //                 StackName: "MyStack",
+                //                 TemplatePath: "build_output::sam-templated.yaml",
+                //             },
+                //             inputArtifacts: ["build_output"],
+                //             name: "Deploy",
+                //             owner: "AWS",
+                //             provider: "CloudFormation",
+                //             version: "1",
+                //         },
+                //     ],
+                //     name: "Deploy",
+                // },
             ],
         });
     }
